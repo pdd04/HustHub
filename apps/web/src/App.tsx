@@ -6,6 +6,7 @@ import { DetailPage } from "./pages/DetailPage";
 import { UploadPage } from "./pages/UploadPage";
 import { ReviewerDashboardPage } from "./pages/ReviewerDashboardPage";
 import { ExamModePage } from "./pages/ExamModePage";
+import { AdminDashboardPage } from "./pages/AdminDashboardPage";
 import { getCurrentUser, logoutUser } from "./lib/api";
 
 type Route =
@@ -15,7 +16,8 @@ type Route =
   | { name: "register" }
   | { name: "upload" }
   | { name: "review" }
-  | { name: "exam-mode" };
+  | { name: "exam-mode" }
+  | { name: "admin" };
 
 const authTokenStorageKey = "itss.accessToken";
 
@@ -165,6 +167,17 @@ export default function App() {
     );
   }
 
+  if (route.name === "admin") {
+    return (
+      <AdminDashboardPage
+        currentUser={currentUser}
+        accessToken={accessToken}
+        onBack={() => navigate("/documents")}
+        onLogin={() => navigate("/login")}
+      />
+    );
+  }
+
   return (
     <SearchPage
       currentUser={currentUser}
@@ -175,6 +188,7 @@ export default function App() {
       onNavigateUpload={() => navigate("/upload")}
       onNavigateReview={() => navigate("/review")}
       onNavigateExamMode={() => navigate("/exam-mode")}
+      onNavigateAdmin={() => navigate("/admin")}
       onLogout={logout}
     />
   );
@@ -186,6 +200,7 @@ function readRoute(): Route {
   if (window.location.pathname === "/upload") return { name: "upload" };
   if (window.location.pathname === "/review") return { name: "review" };
   if (window.location.pathname === "/exam-mode") return { name: "exam-mode" };
+  if (window.location.pathname === "/admin") return { name: "admin" };
 
   const match = window.location.pathname.match(/^\/documents\/([^/]+)$/);
 

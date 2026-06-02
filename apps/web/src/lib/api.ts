@@ -1,6 +1,21 @@
 import type {
+  AdminAuditLogsResponse,
+  AdminDeleteResponse,
+  AdminExamItem,
+  AdminInstructorItem,
+  AdminInstitutionItem,
+  AdminMajorItem,
+  AdminMutationResponse,
+  AdminReportItem,
+  AdminReportsResponse,
+  AdminSubjectItem,
+  AdminSummaryResponse,
+  AdminTaxonomyResponse,
+  AdminUserItem,
+  AdminUsersResponse,
   AuthResponse,
   CommentDocumentResponse,
+  DocumentVisibility,
   MeResponse,
   DeleteCourseEnrollmentResponse,
   DocumentDetailResponse,
@@ -11,12 +26,15 @@ import type {
   RatingDocumentResponse,
   ReportDocumentResponse,
   ReportReason,
+  ReportStatus,
   ReviewDecision,
   ReviewDocumentResponse,
   ReviewQueueResponse,
   UpsertCourseEnrollmentResponse,
   UploadDocumentResponse,
   UploadOptionsResponse,
+  UserRole,
+  UserStatus,
   VerificationLevel
 } from "@itss/shared";
 
@@ -180,6 +198,150 @@ export async function upsertCourseEnrollment(
 export async function deleteCourseEnrollment(subjectId: string, token: string) {
   return fetchJson<DeleteCourseEnrollmentResponse>(`/api/personalization/enrollments/${encodeURIComponent(subjectId)}`, {
     method: "DELETE",
+    token
+  });
+}
+
+export type AdminResourceItemMap = {
+  institutions: AdminInstitutionItem;
+  majors: AdminMajorItem;
+  subjects: AdminSubjectItem;
+  instructors: AdminInstructorItem;
+  exams: AdminExamItem;
+};
+
+export type AdminResource = keyof AdminResourceItemMap;
+
+export async function getAdminSummary(token: string, signal?: AbortSignal) {
+  return fetchJson<AdminSummaryResponse>("/api/admin/summary", {
+    signal,
+    token
+  });
+}
+
+export async function getAdminTaxonomy(token: string, signal?: AbortSignal) {
+  return fetchJson<AdminTaxonomyResponse>("/api/admin/taxonomy", {
+    signal,
+    token
+  });
+}
+
+export async function createAdminResource<R extends AdminResource>(resource: R, payload: Record<string, unknown>, token: string) {
+  return fetchJson<AdminMutationResponse<AdminResourceItemMap[R]>>(`/api/admin/${resource}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    token
+  });
+}
+
+export async function updateAdminResource<R extends AdminResource>(
+  resource: R,
+  id: string,
+  payload: Record<string, unknown>,
+  token: string
+) {
+  return fetchJson<AdminMutationResponse<AdminResourceItemMap[R]>>(`/api/admin/${resource}/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    token
+  });
+}
+
+export async function deleteAdminResource(resource: AdminResource, id: string, token: string) {
+  return fetchJson<AdminDeleteResponse>(`/api/admin/${resource}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    token
+  });
+}
+
+export async function getAdminUsers(
+  token: string,
+  query: {
+    q?: string;
+    role?: UserRole | "all";
+    status?: UserStatus | "all";
+    page?: number;
+    limit?: number;
+  } = {},
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams();
+
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.role && query.role !== "all") params.set("role", query.role);
+  if (query.status && query.status !== "all") params.set("status", query.status);
+  if (query.page && query.page > 1) params.set("page", String(query.page));
+  if (query.limit) params.set("limit", String(query.limit));
+
+  return fetchJson<AdminUsersResponse>(`/api/admin/users${params.toString() ? `?${params.toString()}` : ""}`, {
+    signal,
+    token
+  });
+}
+
+export async function updateAdminUser(
+  userId: string,
+  payload: {
+    role?: UserRole;
+    status?: UserStatus;
+    institutionId?: string | null;
+    majorId?: string | null;
+  },
+  token: string
+) {
+  return fetchJson<AdminMutationResponse<AdminUserItem>>(`/api/admin/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    token
+  });
+}
+
+export async function getAdminReports(token: string, status: ReportStatus | "all" = "open", signal?: AbortSignal) {
+  const suffix = status === "all" ? "" : `?status=${encodeURIComponent(status)}`;
+
+  return fetchJson<AdminReportsResponse>(`/api/admin/reports${suffix}`, {
+    signal,
+    token
+  });
+}
+
+export async function updateAdminReport(reportId: string, payload: { status: ReportStatus; hideDocument: boolean }, token: string) {
+  return fetchJson<AdminMutationResponse<AdminReportItem>>(`/api/admin/reports/${encodeURIComponent(reportId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    token
+  });
+}
+
+export async function updateAdminDocumentVisibility(documentId: string, visibility: DocumentVisibility, token: string) {
+  return fetchJson<{ item: { id: string; title: string; visibility: DocumentVisibility } }>(
+    `/api/admin/documents/${encodeURIComponent(documentId)}/visibility`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ visibility }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      token
+    }
+  );
+}
+
+export async function getAdminAuditLogs(token: string, signal?: AbortSignal) {
+  return fetchJson<AdminAuditLogsResponse>("/api/admin/audit-logs", {
+    signal,
     token
   });
 }

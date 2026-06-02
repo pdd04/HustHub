@@ -50,6 +50,15 @@ type DemoExam = {
   location: string;
 };
 
+type DemoInstructor = {
+  fullName: string;
+  title: string;
+  email: string;
+  institutionCode: string;
+  majorCode: string;
+  subjectCode: string;
+};
+
 const demoInstitutionCode = "VERITAS-DEMO";
 const demoPassword = "Password123";
 
@@ -434,6 +443,33 @@ const exams: DemoExam[] = [
   }
 ];
 
+const instructors: DemoInstructor[] = [
+  {
+    fullName: "Dr. Nguyen Minh",
+    title: "Lecturer",
+    email: "nguyen.minh@veritas.local",
+    institutionCode: "VNU",
+    majorCode: "CNTT",
+    subjectCode: "ALG"
+  },
+  {
+    fullName: "ThS. Tran Thu",
+    title: "Teaching Assistant",
+    email: "tran.thu@veritas.local",
+    institutionCode: "HUST",
+    majorCode: "CNTT",
+    subjectCode: "DB"
+  },
+  {
+    fullName: "Dr. Pham Linh",
+    title: "Reviewer",
+    email: "pham.linh@veritas.local",
+    institutionCode: "VNU",
+    majorCode: "CNTT",
+    subjectCode: "ML"
+  }
+];
+
 async function main() {
   const institutionRecords = new Map<string, { id: string }>();
 
@@ -654,6 +690,39 @@ async function main() {
         examDate: exam.examDate,
         termLabel: exam.termLabel,
         location: exam.location
+      }
+    });
+  }
+
+  for (const instructor of instructors) {
+    const institution = institutionRecords.get(instructor.institutionCode);
+    const major = majorRecords.get(instructor.majorCode);
+    const subject = subjectRecords.get(instructor.subjectCode);
+
+    if (!institution || !major || !subject) {
+      throw new Error(`Missing instructor relation for ${instructor.fullName}.`);
+    }
+
+    await prisma.instructor.upsert({
+      where: {
+        subjectId_fullName: {
+          subjectId: subject.id,
+          fullName: instructor.fullName
+        }
+      },
+      update: {
+        institutionId: institution.id,
+        majorId: major.id,
+        title: instructor.title,
+        email: instructor.email
+      },
+      create: {
+        institutionId: institution.id,
+        majorId: major.id,
+        subjectId: subject.id,
+        fullName: instructor.fullName,
+        title: instructor.title,
+        email: instructor.email
       }
     });
   }

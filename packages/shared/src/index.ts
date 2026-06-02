@@ -16,6 +16,10 @@ export type ReportReason = (typeof reportReasons)[number];
 
 export type ReportStatus = "open" | "resolved" | "dismissed";
 
+export const documentVisibilities = ["public", "private", "hidden"] as const;
+
+export type DocumentVisibility = (typeof documentVisibilities)[number];
+
 export const examTypes = ["midterm", "final", "quiz"] as const;
 
 export type ExamType = (typeof examTypes)[number];
@@ -23,6 +27,10 @@ export type ExamType = (typeof examTypes)[number];
 export const userRoles = ["student", "reviewer", "admin"] as const;
 
 export type UserRole = (typeof userRoles)[number];
+
+export const userStatuses = ["active", "suspended"] as const;
+
+export type UserStatus = (typeof userStatuses)[number];
 
 export const documentTypes = [
   "textbook",
@@ -289,5 +297,171 @@ export type UpsertCourseEnrollmentResponse = {
 };
 
 export type DeleteCourseEnrollmentResponse = {
+  deleted: boolean;
+};
+
+export type AdminInstitutionItem = {
+  id: string;
+  code: string | null;
+  name: string;
+  description: string | null;
+  majorCount: number;
+  userCount: number;
+  documentCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminMajorItem = {
+  id: string;
+  institutionId: string | null;
+  institutionName: string | null;
+  code: string | null;
+  name: string;
+  description: string | null;
+  subjectCount: number;
+  userCount: number;
+  documentCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminSubjectItem = {
+  id: string;
+  majorId: string | null;
+  majorName: string | null;
+  code: string | null;
+  name: string;
+  description: string | null;
+  documentCount: number;
+  examCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminInstructorItem = {
+  id: string;
+  institutionId: string | null;
+  institutionName: string | null;
+  majorId: string | null;
+  majorName: string | null;
+  subjectId: string | null;
+  subjectName: string | null;
+  fullName: string;
+  title: string | null;
+  email: string | null;
+  bio: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminExamItem = {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  majorName: string | null;
+  name: string;
+  examType: ExamType;
+  examDate: string;
+  termLabel: string | null;
+  location: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminTaxonomyResponse = {
+  institutions: AdminInstitutionItem[];
+  majors: AdminMajorItem[];
+  subjects: AdminSubjectItem[];
+  instructors: AdminInstructorItem[];
+  exams: AdminExamItem[];
+};
+
+export type AdminUserItem = {
+  id: string;
+  email: string;
+  fullName: string;
+  studentCode: string | null;
+  institutionId: string | null;
+  institutionName: string | null;
+  majorId: string | null;
+  majorName: string | null;
+  role: UserRole;
+  status: UserStatus;
+  documentCount: number;
+  reviewCount: number;
+  reportCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminUsersResponse = {
+  items: AdminUserItem[];
+  pagination: PaginationMeta;
+};
+
+export type AdminReportItem = {
+  id: string;
+  reason: ReportReason;
+  detail: string | null;
+  status: ReportStatus;
+  reporterName: string;
+  reporterEmail: string;
+  document: Pick<DocumentItem, "id" | "title" | "verificationStatus" | "verification" | "subject" | "fieldName"> & {
+    visibility: DocumentVisibility;
+  };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminReportsResponse = {
+  items: AdminReportItem[];
+};
+
+export type AdminAuditLogItem = {
+  id: string;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  metadata: unknown;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+};
+
+export type AdminAuditLogsResponse = {
+  items: AdminAuditLogItem[];
+};
+
+export type AdminSummaryResponse = {
+  users: {
+    total: number;
+    admins: number;
+    reviewers: number;
+    suspended: number;
+  };
+  documents: {
+    total: number;
+    pending: number;
+    hidden: number;
+    openReports: number;
+  };
+  taxonomy: {
+    institutions: number;
+    majors: number;
+    subjects: number;
+    instructors: number;
+    exams: number;
+  };
+};
+
+export type AdminMutationResponse<T> = {
+  item: T;
+};
+
+export type AdminDeleteResponse = {
   deleted: boolean;
 };

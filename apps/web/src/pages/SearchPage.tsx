@@ -6,7 +6,19 @@ import type {
   DocumentType,
   VerificationLevel
 } from "@itss/shared";
-import { CalendarDays, ChevronLeft, ChevronRight, Filter, LogIn, LogOut, Search, ShieldCheck, UploadCloud, UserPlus } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  LogIn,
+  LogOut,
+  Search,
+  Settings,
+  ShieldCheck,
+  UploadCloud,
+  UserPlus
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DocumentCard } from "../components/DocumentCard";
 import { FilterSidebar } from "../components/FilterSidebar";
@@ -43,6 +55,7 @@ type SearchPageProps = {
   onNavigateUpload: () => void;
   onNavigateReview: () => void;
   onNavigateExamMode: () => void;
+  onNavigateAdmin: () => void;
   onLogout: () => void;
 };
 
@@ -66,6 +79,7 @@ export function SearchPage({
   onNavigateUpload,
   onNavigateReview,
   onNavigateExamMode,
+  onNavigateAdmin,
   onLogout
 }: SearchPageProps) {
   const [queryState, setQueryState] = useState<QueryState>(() => readQueryStateFromUrl());
@@ -226,6 +240,11 @@ export function SearchPage({
                 {currentUser.role === "reviewer" || currentUser.role === "admin" ? (
                   <button className="ghost-button" type="button" onClick={onNavigateReview}>
                     <ShieldCheck size={16} /> Review
+                  </button>
+                ) : null}
+                {currentUser.role === "admin" ? (
+                  <button className="ghost-button" type="button" onClick={onNavigateAdmin}>
+                    <Settings size={16} /> Admin
                   </button>
                 ) : null}
                 <button className="ghost-button" type="button" onClick={onNavigateExamMode}>

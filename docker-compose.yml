@@ -1,0 +1,52 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: itss_documents
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ppassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: mysql://root:password@mysql:3306/itss_documents
+      PORT: 3000
+      WEB_ORIGIN: http://localhost:5173
+      JWT_SECRET: replace-with-a-long-random-container-secret
+      ACCESS_TOKEN_TTL_SECONDS: 28800
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 180
+      MAX_UPLOAD_FILE_BYTES: 26214400
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["sh", "-c", "npm run prisma:deploy -w apps/api && npm run start -w apps/api"]
+    ports:
+      - "3000:3000"
+    volumes:
+      - api-uploads:/app/apps/api/uploads
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_BASE_URL: http://localhost:3000
+    depends_on:
+      - api
+    ports:
+      - "5173:5173"
+
+volumes:
+  mysql-data:
+  api-uploads:

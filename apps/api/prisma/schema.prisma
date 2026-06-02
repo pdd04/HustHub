@@ -93,6 +93,7 @@ model User {
   comments      DocumentComment[]
   reports       DocumentReport[]
   enrollments   CourseEnrollment[]
+  auditLogs     AuditLog[]    @relation("ActorAuditLogs")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
@@ -109,6 +110,7 @@ model Institution {
   majors      Major[]
   users       User[]
   documents   Document[]
+  instructors Instructor[]
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
@@ -125,6 +127,7 @@ model Major {
   users         User[]
   subjects      Subject[]
   documents     Document[]
+  instructors   Instructor[]
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
@@ -143,6 +146,7 @@ model Subject {
   documents   Document[]
   exams       Exam[]
   enrollments CourseEnrollment[]
+  instructors Instructor[]
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
@@ -296,4 +300,44 @@ model CourseEnrollment {
   @@unique([userId, subjectId])
   @@index([subjectId])
   @@map("course_enrollments")
+}
+
+model Instructor {
+  id            String       @id @default(cuid())
+  institutionId String?      @map("institution_id")
+  majorId       String?      @map("major_id")
+  subjectId     String?      @map("subject_id")
+  fullName      String       @map("full_name")
+  title         String?
+  email         String?
+  bio           String?      @db.Text
+  institution   Institution? @relation(fields: [institutionId], references: [id], onDelete: SetNull)
+  major         Major?       @relation(fields: [majorId], references: [id], onDelete: SetNull)
+  subject       Subject?     @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@unique([subjectId, fullName])
+  @@index([institutionId])
+  @@index([majorId])
+  @@index([subjectId])
+  @@map("instructors")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?  @map("actor_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  actor      User?    @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }

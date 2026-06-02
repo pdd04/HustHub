@@ -32,7 +32,7 @@ import { prisma } from "../prisma.js";
 
 const router = Router();
 const uploadsDirectory = fileURLToPath(new URL("../../uploads/documents", import.meta.url));
-const maxUploadFileSize = 25 * 1024 * 1024;
+const maxUploadFileSize = readEnvironmentInteger(process.env.MAX_UPLOAD_FILE_BYTES, 25 * 1024 * 1024);
 
 const documentTypeValues = [
   "textbook",
@@ -1359,6 +1359,12 @@ function readPositiveInteger(value: unknown, fallback: number | null, min: numbe
   if (!Number.isFinite(parsedValue)) return fallback;
 
   return Math.min(Math.max(parsedValue, min), max);
+}
+
+function readEnvironmentInteger(value: unknown, fallback: number) {
+  const parsedValue = Number.parseInt(readString(value), 10);
+
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
 }
 
 function parseUploadTags(value: unknown) {
