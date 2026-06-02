@@ -1,0 +1,157 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  student
+  reviewer
+  admin
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+enum DocumentType {
+  textbook
+  lecture
+  past_exam
+  summary_note
+  exercise
+  survival_kit
+  other
+}
+
+enum VerificationLevel {
+  unverified
+  bronze
+  silver
+  gold
+}
+
+enum VerificationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum DocumentVisibility {
+  public
+  private
+  hidden
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  passwordHash  String       @map("password_hash")
+  fullName      String       @map("full_name")
+  studentCode   String?      @map("student_code")
+  institutionId String?      @map("institution_id")
+  majorId       String?      @map("major_id")
+  role          UserRole     @default(student)
+  status        UserStatus   @default(active)
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  major         Major?       @relation(fields: [majorId], references: [id])
+  documents     Document[]   @relation("UploadedDocuments")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@index([institutionId])
+  @@index([majorId])
+  @@map("users")
+}
+
+model Institution {
+  id          String     @id @default(cuid())
+  name        String
+  code        String?    @unique
+  description String?    @db.Text
+  majors      Major[]
+  users       User[]
+  documents   Document[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@map("institutions")
+}
+
+model Major {
+  id            String       @id @default(cuid())
+  institutionId String?      @map("institution_id")
+  code          String?
+  name          String
+  description   String?      @db.Text
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  users         User[]
+  subjects      Subject[]
+  documents     Document[]
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  @@unique([institutionId, code])
+  @@index([institutionId])
+  @@map("majors")
+}
+
+model Subject {
+  id          String     @id @default(cuid())
+  majorId     String?    @map("major_id")
+  code        String?
+  name        String
+  description String?    @db.Text
+  major       Major?     @relation(fields: [majorId], references: [id])
+  documents   Document[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@unique([majorId, code])
+  @@index([majorId])
+  @@map("subjects")
+}
+
+model Document {
+  id                 String               @id @default(cuid())
+  title              String
+  description        String?              @db.Text
+  authorName         String?              @map("author_name")
+  uploaderId         String?              @map("uploader_id")
+  institutionId      String?              @map("institution_id")
+  majorId            String?              @map("major_id")
+  subjectId          String?              @map("subject_id")
+  documentType       DocumentType         @default(other) @map("document_type")
+  year               Int?
+  pages              Int?
+  language           String               @default("vi")
+  fileUrl            String?              @map("file_url")
+  thumbnailUrl       String?              @map("thumbnail_url")
+  fileSize           Int?                 @map("file_size")
+  mimeType           String?              @map("mime_type")
+  verificationLevel  VerificationLevel    @default(unverified) @map("verification_level")
+  verificationStatus VerificationStatus   @default(pending) @map("verification_status")
+  visibility         DocumentVisibility   @default(public)
+  ratingAvg          Decimal              @default(0) @map("rating_avg") @db.Decimal(3, 2)
+  ratingCount        Int                  @default(0) @map("rating_count")
+  viewCount          Int                  @default(0) @map("view_count")
+  downloadCount      Int                  @default(0) @map("download_count")
+  uploader           User?                @relation("UploadedDocuments", fields: [uploaderId], references: [id])
+  institution        Institution?         @relation(fields: [institutionId], references: [id])
+  major              Major?               @relation(fields: [majorId], references: [id])
+  subject            Subject?             @relation(fields: [subjectId], references: [id])
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt @map("updated_at")
+
+  @@index([subjectId, verificationLevel, visibility])
+  @@index([majorId, documentType, visibility])
+  @@index([createdAt])
+  @@index([ratingAvg, ratingCount])
+  @@index([downloadCount])
+  @@index([uploaderId])
+  @@map("documents")
+}
