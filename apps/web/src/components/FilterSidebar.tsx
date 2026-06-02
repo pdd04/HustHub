@@ -1,42 +1,48 @@
+import type { DocumentType, DocumentTypeFilterOption, FilterOption, VerificationLevel } from "@itss/shared";
 import { Filter, X } from "lucide-react";
-import {
-  fields,
-  subjectsByField,
-  verificationLevels,
-  type FieldItem,
-  type VerificationLevel
-} from "../data/mockDocuments";
+import { verificationLevelOrder, verificationLevels } from "../data/documentMeta";
 
 type FilterSidebarProps = {
-  selectedField: string;
-  selectedSubject: string | null;
+  majors: FilterOption[];
+  subjectsByMajor: Record<string, FilterOption[]>;
+  selectedMajorId: string;
+  selectedSubjectId: string | null;
+  selectedYear: number | null;
   selectedVerifications: VerificationLevel[];
-  selectedTypes: string[];
-  documentTypes: string[];
+  selectedTypes: DocumentType[];
+  documentTypes: DocumentTypeFilterOption[];
+  years: FilterOption[];
   activeFilterCount: number;
-  onSelectField: (fieldId: string) => void;
-  onSelectSubject: (subject: string | null) => void;
+  onSelectMajor: (majorId: string) => void;
+  onSelectSubject: (subjectId: string | null) => void;
+  onSelectYear: (year: number | null) => void;
   onToggleVerification: (level: VerificationLevel) => void;
-  onToggleType: (type: string) => void;
+  onToggleType: (type: DocumentType) => void;
   onClearFilters: () => void;
   onClose?: () => void;
 };
 
 export function FilterSidebar({
-  selectedField,
-  selectedSubject,
+  majors,
+  subjectsByMajor,
+  selectedMajorId,
+  selectedSubjectId,
+  selectedYear,
   selectedVerifications,
   selectedTypes,
   documentTypes,
+  years,
   activeFilterCount,
-  onSelectField,
+  onSelectMajor,
   onSelectSubject,
+  onSelectYear,
   onToggleVerification,
   onToggleType,
   onClearFilters,
   onClose
 }: FilterSidebarProps) {
-  const currentSubjects = selectedField !== "all" ? subjectsByField[selectedField] ?? [] : [];
+  const currentSubjects = selectedMajorId !== "all" ? subjectsByMajor[selectedMajorId] ?? [] : [];
+  const totalDocuments = majors.reduce((total, major) => total + major.count, 0);
 
   return (
     <aside className="filter-sidebar">
@@ -59,15 +65,23 @@ export function FilterSidebar({
       ) : null}
 
       <FilterGroup title="Ngành học">
-        {fields.map((field: FieldItem) => (
+        <button
+          className={`filter-option ${selectedMajorId === "all" ? "is-active" : ""}`}
+          type="button"
+          onClick={() => onSelectMajor("all")}
+        >
+          <span>Tất cả</span>
+          <span>{totalDocuments}</span>
+        </button>
+        {majors.map((major) => (
           <button
-            key={field.id}
-            className={`filter-option ${selectedField === field.id ? "is-active" : ""}`}
+            key={major.id}
+            className={`filter-option ${selectedMajorId === major.id ? "is-active" : ""}`}
             type="button"
-            onClick={() => onSelectField(field.id)}
+            onClick={() => onSelectMajor(major.id)}
           >
-            <span>{field.name}</span>
-            <span>{field.count}</span>
+            <span>{major.name}</span>
+            <span>{major.count}</span>
           </button>
         ))}
       </FilterGroup>
@@ -75,7 +89,7 @@ export function FilterSidebar({
       {currentSubjects.length > 0 ? (
         <FilterGroup title="Môn học">
           <button
-            className={`filter-chip ${selectedSubject === null ? "is-active" : ""}`}
+            className={`filter-chip ${selectedSubjectId === null ? "is-active" : ""}`}
             type="button"
             onClick={() => onSelectSubject(null)}
           >
@@ -83,19 +97,41 @@ export function FilterSidebar({
           </button>
           {currentSubjects.map((subject) => (
             <button
-              key={subject}
-              className={`filter-chip ${selectedSubject === subject ? "is-active" : ""}`}
+              key={subject.id}
+              className={`filter-chip ${selectedSubjectId === subject.id ? "is-active" : ""}`}
               type="button"
-              onClick={() => onSelectSubject(subject)}
+              onClick={() => onSelectSubject(subject.id)}
             >
-              {subject}
+              {subject.name}
+            </button>
+          ))}
+        </FilterGroup>
+      ) : null}
+
+      {years.length > 0 ? (
+        <FilterGroup title="Năm học">
+          <button
+            className={`filter-chip ${selectedYear === null ? "is-active" : ""}`}
+            type="button"
+            onClick={() => onSelectYear(null)}
+          >
+            Tất cả năm
+          </button>
+          {years.map((year) => (
+            <button
+              key={year.id}
+              className={`filter-chip ${selectedYear === Number(year.id) ? "is-active" : ""}`}
+              type="button"
+              onClick={() => onSelectYear(Number(year.id))}
+            >
+              {year.name}
             </button>
           ))}
         </FilterGroup>
       ) : null}
 
       <FilterGroup title="Mức xác thực">
-        {(Object.keys(verificationLevels) as VerificationLevel[]).map((level) => (
+        {verificationLevelOrder.map((level) => (
           <label key={level} className="checkbox-row">
             <input
               type="checkbox"
@@ -109,9 +145,11 @@ export function FilterSidebar({
 
       <FilterGroup title="Loại tài liệu">
         {documentTypes.map((type) => (
-          <label key={type} className="checkbox-row">
-            <input type="checkbox" checked={selectedTypes.includes(type)} onChange={() => onToggleType(type)} />
-            <span>{type}</span>
+          <label key={type.id} className="checkbox-row">
+            <input type="checkbox" checked={selectedTypes.includes(type.id)} onChange={() => onToggleType(type.id)} />
+            <span>
+              {type.name} <small>({type.count})</small>
+            </span>
           </label>
         ))}
       </FilterGroup>

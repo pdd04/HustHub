@@ -1,15 +1,15 @@
-export type SortValue = "relevance" | "newest" | "popular" | "rating";
+import type { DocumentSort } from "@itss/shared";
 
 type SortSelectProps = {
-  value: SortValue;
-  onChange: (value: SortValue) => void;
+  value: DocumentSort;
+  onChange: (value: DocumentSort) => void;
 };
 
 export function SortSelect({ value, onChange }: SortSelectProps) {
   return (
     <label className="sort-select">
       <span>Sắp xếp</span>
-      <select value={value} onChange={(event) => onChange(event.target.value as SortValue)}>
+      <select value={value} onChange={(event) => onChange(event.target.value as DocumentSort)}>
         <option value="relevance">Liên quan nhất</option>
         <option value="newest">Mới nhất</option>
         <option value="popular">Tải nhiều</option>

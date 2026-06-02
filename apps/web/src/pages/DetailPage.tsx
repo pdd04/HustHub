@@ -1,4 +1,4 @@
-import { useState } from "react";
+import type { DocumentItem } from "@itss/shared";
 import {
   ArrowLeft,
   Bookmark,
@@ -15,12 +15,14 @@ import {
   User,
   X
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { LargeVerificationSeal } from "../components/LargeVerificationSeal";
 import { VerificationBadge } from "../components/VerificationBadge";
-import { type DocumentItem, verificationLevels } from "../data/mockDocuments";
+import { verificationLevels } from "../data/documentMeta";
+import { getAssetUrl, getDocumentById } from "../lib/api";
 
 type DetailPageProps = {
-  document: DocumentItem;
+  documentId: string;
   onBack: () => void;
 };
 
@@ -43,28 +45,60 @@ const sampleReviews = [
   }
 ];
 
-export function DetailPage({ document, onBack }: DetailPageProps) {
+export function DetailPage({ documentId, onBack }: DetailPageProps) {
+  const [document, setDocument] = useState<DocumentItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    getDocumentById(documentId, controller.signal)
+      .then((payload) => setDocument(payload.document))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setErrorMessage(error instanceof Error ? error.message : "Không thể tải chi tiết tài liệu.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [documentId]);
+
+  if (isLoading && !document) {
+    return (
+      <DetailShell onBack={onBack}>
+        <StatusPanel title="Đang tải tài liệu" description="Hệ thống đang lấy thông tin chi tiết từ API." />
+      </DetailShell>
+    );
+  }
+
+  if (errorMessage || !document) {
+    return (
+      <DetailShell onBack={onBack}>
+        <StatusPanel title="Không thể mở tài liệu" description={errorMessage ?? "Không tìm thấy tài liệu."}>
+          <button className="secondary-button" type="button" onClick={() => window.location.reload()}>
+            Thử lại
+          </button>
+        </StatusPanel>
+      </DetailShell>
+    );
+  }
+
   const verification = verificationLevels[document.verification];
+  const openFile = () => {
+    if (document.fileUrl) {
+      window.open(getAssetUrl(document.fileUrl), "_blank", "noopener,noreferrer");
+    }
+  };
 
   return (
-    <div className="app-shell">
-      <header className="detail-header">
-        <div className="detail-header__inner">
-          <button className="ghost-button" type="button" onClick={onBack}>
-            <ArrowLeft size={16} /> Quay lại
-          </button>
-          <div className="detail-header__actions">
-            <button className="ghost-button" type="button">
-              <Bookmark size={16} /> Lưu
-            </button>
-            <button className="ghost-button" type="button">
-              <Share2 size={16} /> Chia sẻ
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <DetailShell onBack={onBack}>
       <main className="detail-layout">
         <article className="detail-main">
           <section className="detail-hero">
@@ -77,6 +111,7 @@ export function DetailPage({ document, onBack }: DetailPageProps) {
                 <VerificationBadge level={document.verification} />
                 <span>{document.type}</span>
                 <span>{document.year}</span>
+                {document.verificationStatus === "pending" ? <span className="status-pill">Chờ kiểm duyệt</span> : null}
               </div>
               <h1>{document.title}</h1>
               <p>{document.description}</p>
@@ -88,17 +123,17 @@ export function DetailPage({ document, onBack }: DetailPageProps) {
                   <Building2 size={15} /> {document.institution}
                 </span>
                 <span>
-                  <Star size={15} fill="currentColor" /> {document.rating} ({document.reviews} đánh giá)
+                  <Star size={15} fill="currentColor" /> {document.rating.toFixed(1)} ({document.reviews} đánh giá)
                 </span>
               </div>
             </div>
           </section>
 
           <section className="action-strip">
-            <button className="primary-button" type="button">
+            <button className="primary-button" type="button" disabled={!document.fileUrl} onClick={openFile}>
               <Download size={18} /> Tải tài liệu
             </button>
-            <button className="secondary-button" type="button">
+            <button className="secondary-button" type="button" disabled={!document.fileUrl} onClick={openFile}>
               <Eye size={18} /> Đọc online
             </button>
             <div>
@@ -116,8 +151,11 @@ export function DetailPage({ document, onBack }: DetailPageProps) {
             <div className="info-grid">
               <InfoItem label="Ngành" value={document.fieldName} />
               <InfoItem label="Môn học" value={document.subject} />
-              <InfoItem label="Số trang" value={`${document.pages} trang`} />
+              <InfoItem label="Học kỳ" value={document.termLabel ?? "Chưa rõ"} />
+              <InfoItem label="Giảng viên" value={document.instructorName ?? "Chưa rõ"} />
+              <InfoItem label="Số trang" value={document.pages > 0 ? `${document.pages} trang` : "Chưa rõ"} />
               <InfoItem label="Kích thước" value={document.size} />
+              {document.examName ? <InfoItem label="Kỳ thi" value={document.examName} /> : null}
             </div>
             <div className="tag-row">
               {document.tags.map((tag) => (
@@ -145,11 +183,7 @@ export function DetailPage({ document, onBack }: DetailPageProps) {
                   </div>
                   <div className="review-stars">
                     {Array.from({ length: 5 }).map((_, index) => (
-                      <Star
-                        key={index}
-                        size={13}
-                        fill={index < review.rating ? "currentColor" : "transparent"}
-                      />
+                      <Star key={index} size={13} fill={index < review.rating ? "currentColor" : "transparent"} />
                     ))}
                   </div>
                 </div>
@@ -219,7 +253,42 @@ export function DetailPage({ document, onBack }: DetailPageProps) {
           </div>
         </div>
       ) : null}
+    </DetailShell>
+  );
+}
+
+function DetailShell({ onBack, children }: { onBack: () => void; children: React.ReactNode }) {
+  return (
+    <div className="app-shell">
+      <header className="detail-header">
+        <div className="detail-header__inner">
+          <button className="ghost-button" type="button" onClick={onBack}>
+            <ArrowLeft size={16} /> Quay lại
+          </button>
+          <div className="detail-header__actions">
+            <button className="ghost-button" type="button">
+              <Bookmark size={16} /> Lưu
+            </button>
+            <button className="ghost-button" type="button">
+              <Share2 size={16} /> Chia sẻ
+            </button>
+          </div>
+        </div>
+      </header>
+      {children}
     </div>
+  );
+}
+
+function StatusPanel({ title, description, children }: { title: string; description: string; children?: React.ReactNode }) {
+  return (
+    <main className="detail-layout detail-layout--single">
+      <div className="status-panel">
+        <h2>{title}</h2>
+        <p>{description}</p>
+        {children ? <div className="status-panel__actions">{children}</div> : null}
+      </div>
+    </main>
   );
 }
 

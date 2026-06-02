@@ -125,6 +125,10 @@ model Document {
   institutionId      String?              @map("institution_id")
   majorId            String?              @map("major_id")
   subjectId          String?              @map("subject_id")
+  instructorName     String?              @map("instructor_name")
+  termLabel          String?              @map("term_label")
+  examName           String?              @map("exam_name")
+  tags               Json?
   documentType       DocumentType         @default(other) @map("document_type")
   year               Int?
   pages              Int?

@@ -1,5 +1,5 @@
+import type { DocumentItem } from "@itss/shared";
 import { BookOpen, Building2, Calendar, ChevronRight, Download, Eye, FileText, Star, User } from "lucide-react";
-import { type DocumentItem } from "../data/mockDocuments";
 import { VerificationBadge } from "./VerificationBadge";
 
 type DocumentCardProps = {
@@ -46,7 +46,7 @@ export function DocumentCard({ document, onClick }: DocumentCardProps) {
         <div className="document-card__stats">
           <div className="rating">
             <Star size={16} fill="currentColor" />
-            <strong>{document.rating}</strong>
+            <strong>{document.rating.toFixed(1)}</strong>
             <span>({document.reviews})</span>
           </div>
           <span>

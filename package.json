@@ -11,6 +11,7 @@
     "dev:api": "npm run dev -w apps/api",
     "build": "npm run build -w apps/web && npm run build -w apps/api",
     "typecheck": "npm run typecheck -w apps/web && npm run typecheck -w apps/api",
-    "prisma:generate": "npm run prisma:generate -w apps/api"
+    "prisma:generate": "npm run prisma:generate -w apps/api",
+    "prisma:seed": "npm run prisma:seed -w apps/api"
   }
 }

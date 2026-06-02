@@ -1,5 +1,6 @@
 import { ShieldCheck } from "lucide-react";
-import { verificationLevels, type VerificationLevel } from "../data/mockDocuments";
+import type { VerificationLevel } from "@itss/shared";
+import { verificationLevels } from "../data/documentMeta";
 
 type LargeVerificationSealProps = {
   level: VerificationLevel;
