@@ -6,7 +6,7 @@ import type {
   DocumentType,
   VerificationLevel
 } from "@itss/shared";
-import { ChevronLeft, ChevronRight, Filter, LogIn, LogOut, Search, ShieldCheck, UploadCloud, UserPlus } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Filter, LogIn, LogOut, Search, ShieldCheck, UploadCloud, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DocumentCard } from "../components/DocumentCard";
 import { FilterSidebar } from "../components/FilterSidebar";
@@ -42,6 +42,7 @@ type SearchPageProps = {
   onNavigateRegister: () => void;
   onNavigateUpload: () => void;
   onNavigateReview: () => void;
+  onNavigateExamMode: () => void;
   onLogout: () => void;
 };
 
@@ -64,6 +65,7 @@ export function SearchPage({
   onNavigateRegister,
   onNavigateUpload,
   onNavigateReview,
+  onNavigateExamMode,
   onLogout
 }: SearchPageProps) {
   const [queryState, setQueryState] = useState<QueryState>(() => readQueryStateFromUrl());
@@ -226,6 +228,9 @@ export function SearchPage({
                     <ShieldCheck size={16} /> Review
                   </button>
                 ) : null}
+                <button className="ghost-button" type="button" onClick={onNavigateExamMode}>
+                  <CalendarDays size={16} /> Exam mode
+                </button>
                 <button className="primary-button" type="button" onClick={onNavigateUpload}>
                   <UploadCloud size={16} /> Upload
                 </button>

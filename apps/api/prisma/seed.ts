@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient, type DocumentType, type VerificationLevel, type VerificationStatus } from "@prisma/client";
+import { PrismaClient, type DocumentType, type ExamType, type VerificationLevel, type VerificationStatus } from "@prisma/client";
 import { hashPassword } from "../src/auth/password.js";
 
 const prisma = new PrismaClient();
@@ -38,6 +38,16 @@ type DemoDocument = {
   ratingCount: number;
   viewCount: number;
   downloadCount: number;
+};
+
+type DemoExam = {
+  id: string;
+  subjectCode: string;
+  name: string;
+  examType: ExamType;
+  examDate: Date;
+  termLabel: string;
+  location: string;
 };
 
 const demoInstitutionCode = "VERITAS-DEMO";
@@ -288,6 +298,54 @@ const documents: DemoDocument[] = [
     downloadCount: 5210
   },
   {
+    id: "doc-database-final-survival-kit",
+    title: "Database Final Survival Kit",
+    description:
+      "Checklist on thi CSDL gom SQL, chuan hoa, transaction, index, ERD va cac loi thuong gap trong bai final.",
+    authorName: "Reviewer Team CNTT",
+    institutionCode: "HUST",
+    majorCode: "CNTT",
+    subjectCode: "DB",
+    documentType: "survival_kit",
+    year: 2026,
+    pages: 32,
+    fileSize: 2_400_000,
+    termLabel: "HK2 2025-2026",
+    instructorName: "Bo mon He thong thong tin",
+    examName: "Final",
+    tags: ["database", "final", "survival-kit"],
+    verificationLevel: "silver",
+    verificationStatus: "approved",
+    ratingAvg: "4.60",
+    ratingCount: 218,
+    viewCount: 17420,
+    downloadCount: 8320
+  },
+  {
+    id: "doc-algorithms-midterm-survival-kit",
+    title: "Algorithms Midterm Survival Kit",
+    description:
+      "Ban do on thi nhanh cho sorting, recursion, graph traversal va dynamic programming co bai tap mau kem dap an.",
+    authorName: "K66 Algorithm Review Group",
+    institutionCode: "VNU",
+    majorCode: "CNTT",
+    subjectCode: "ALG",
+    documentType: "survival_kit",
+    year: 2026,
+    pages: 28,
+    fileSize: 2_100_000,
+    termLabel: "HK2 2025-2026",
+    instructorName: "TS. Nguyen Minh",
+    examName: "Midterm",
+    tags: ["algorithm", "midterm", "survival-kit"],
+    verificationLevel: "bronze",
+    verificationStatus: "approved",
+    ratingAvg: "4.30",
+    ratingCount: 96,
+    viewCount: 8220,
+    downloadCount: 3190
+  },
+  {
     id: "doc-pending-algorithm-cheatsheet",
     title: "Algorithm quick review sheet",
     description: "Student contributed summary for sorting, graph traversal, dynamic programming and common final exam patterns.",
@@ -334,6 +392,45 @@ const documents: DemoDocument[] = [
     ratingCount: 0,
     viewCount: 6,
     downloadCount: 1
+  }
+];
+
+const exams: DemoExam[] = [
+  {
+    id: "exam-db-final-2026",
+    subjectCode: "DB",
+    name: "CSDL Final 2026",
+    examType: "final",
+    examDate: daysFromNow(12, 8),
+    termLabel: "HK2 2025-2026",
+    location: "G2-301"
+  },
+  {
+    id: "exam-alg-midterm-2026",
+    subjectCode: "ALG",
+    name: "Giai thuat Midterm 2026",
+    examType: "midterm",
+    examDate: daysFromNow(7, 9),
+    termLabel: "HK2 2025-2026",
+    location: "A1-204"
+  },
+  {
+    id: "exam-ml-quiz-2026",
+    subjectCode: "ML",
+    name: "Hoc may Quiz 2",
+    examType: "quiz",
+    examDate: daysFromNow(4, 14),
+    termLabel: "HK2 2025-2026",
+    location: "Lab AI-02"
+  },
+  {
+    id: "exam-stat-final-2026",
+    subjectCode: "STAT",
+    name: "Xac suat thong ke Final",
+    examType: "final",
+    examDate: daysFromNow(16, 8),
+    termLabel: "HK2 2025-2026",
+    location: "B3-102"
   }
 ];
 
@@ -529,6 +626,77 @@ async function main() {
       }
     });
   }
+
+  for (const exam of exams) {
+    const subject = subjectRecords.get(exam.subjectCode);
+
+    if (!subject) {
+      throw new Error(`Missing subject ${exam.subjectCode}.`);
+    }
+
+    await prisma.exam.upsert({
+      where: {
+        id: exam.id
+      },
+      update: {
+        subjectId: subject.id,
+        name: exam.name,
+        examType: exam.examType,
+        examDate: exam.examDate,
+        termLabel: exam.termLabel,
+        location: exam.location
+      },
+      create: {
+        id: exam.id,
+        subjectId: subject.id,
+        name: exam.name,
+        examType: exam.examType,
+        examDate: exam.examDate,
+        termLabel: exam.termLabel,
+        location: exam.location
+      }
+    });
+  }
+
+  const demoStudent = userRecords.get("student@veritas.local");
+
+  if (demoStudent) {
+    for (const subjectCode of ["DB", "ALG", "ML"]) {
+      const subject = subjectRecords.get(subjectCode);
+
+      if (!subject) {
+        throw new Error(`Missing subject ${subjectCode}.`);
+      }
+
+      await prisma.courseEnrollment.upsert({
+        where: {
+          userId_subjectId: {
+            userId: demoStudent.id,
+            subjectId: subject.id
+          }
+        },
+        update: {
+          termLabel: "HK2 2025-2026",
+          emailReminderEnabled: true
+        },
+        create: {
+          userId: demoStudent.id,
+          subjectId: subject.id,
+          termLabel: "HK2 2025-2026",
+          emailReminderEnabled: true
+        }
+      });
+    }
+  }
+}
+
+function daysFromNow(days: number, hour: number) {
+  const date = new Date();
+
+  date.setDate(date.getDate() + days);
+  date.setHours(hour, 0, 0, 0);
+
+  return date;
 }
 
 main()

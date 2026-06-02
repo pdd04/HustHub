@@ -2,16 +2,19 @@ import type {
   AuthResponse,
   CommentDocumentResponse,
   MeResponse,
+  DeleteCourseEnrollmentResponse,
   DocumentDetailResponse,
   DocumentListResponse,
   DocumentSort,
   DocumentType,
+  PersonalizationDashboardResponse,
   RatingDocumentResponse,
   ReportDocumentResponse,
   ReportReason,
   ReviewDecision,
   ReviewDocumentResponse,
   ReviewQueueResponse,
+  UpsertCourseEnrollmentResponse,
   UploadDocumentResponse,
   UploadOptionsResponse,
   VerificationLevel
@@ -145,6 +148,38 @@ export async function reportDocument(documentId: string, reason: ReportReason, d
     headers: {
       "Content-Type": "application/json"
     },
+    token
+  });
+}
+
+export async function getExamDashboard(token: string, signal?: AbortSignal) {
+  return fetchJson<PersonalizationDashboardResponse>("/api/personalization/dashboard", {
+    signal,
+    token
+  });
+}
+
+export async function upsertCourseEnrollment(
+  payload: {
+    subjectId: string;
+    termLabel?: string;
+    emailReminderEnabled: boolean;
+  },
+  token: string
+) {
+  return fetchJson<UpsertCourseEnrollmentResponse>("/api/personalization/enrollments", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    token
+  });
+}
+
+export async function deleteCourseEnrollment(subjectId: string, token: string) {
+  return fetchJson<DeleteCourseEnrollmentResponse>(`/api/personalization/enrollments/${encodeURIComponent(subjectId)}`, {
+    method: "DELETE",
     token
   });
 }

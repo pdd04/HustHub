@@ -4,6 +4,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { fileURLToPath } from "node:url";
 import { authRouter } from "./routes/auth.js";
 import { documentsRouter } from "./routes/documents.js";
+import { personalizationRouter } from "./routes/personalization.js";
 import { prisma } from "./prisma.js";
 
 const app = express();
@@ -37,6 +38,7 @@ app.get("/api/health", (_request: Request, response: Response) => {
 });
 
 app.use("/api/documents", documentsRouter);
+app.use("/api/personalization", personalizationRouter);
 app.use("/api/auth", authRouter);
 
 app.use((_request: Request, response: Response) => {

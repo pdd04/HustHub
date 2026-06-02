@@ -69,6 +69,12 @@ enum ReportStatus {
   dismissed
 }
 
+enum ExamType {
+  midterm
+  final
+  quiz
+}
+
 model User {
   id            String       @id @default(cuid())
   email         String       @unique
@@ -86,6 +92,7 @@ model User {
   ratings       DocumentRating[]
   comments      DocumentComment[]
   reports       DocumentReport[]
+  enrollments   CourseEnrollment[]
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
@@ -134,6 +141,8 @@ model Subject {
   description String?    @db.Text
   major       Major?     @relation(fields: [majorId], references: [id])
   documents   Document[]
+  exams       Exam[]
+  enrollments CourseEnrollment[]
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
@@ -254,4 +263,37 @@ model DocumentReport {
   @@index([documentId, status])
   @@index([reporterId, status])
   @@map("document_reports")
+}
+
+model Exam {
+  id          String     @id @default(cuid())
+  subjectId   String     @map("subject_id")
+  name        String
+  examType    ExamType   @map("exam_type")
+  examDate    DateTime   @map("exam_date")
+  termLabel   String?    @map("term_label")
+  location    String?
+  subject     Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([subjectId, examDate])
+  @@index([examType, examDate])
+  @@map("exams")
+}
+
+model CourseEnrollment {
+  id                   String   @id @default(cuid())
+  userId               String   @map("user_id")
+  subjectId            String   @map("subject_id")
+  termLabel            String?  @map("term_label")
+  emailReminderEnabled Boolean  @default(true) @map("email_reminder_enabled")
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject              Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, subjectId])
+  @@index([subjectId])
+  @@map("course_enrollments")
 }

@@ -16,6 +16,10 @@ export type ReportReason = (typeof reportReasons)[number];
 
 export type ReportStatus = "open" | "resolved" | "dismissed";
 
+export const examTypes = ["midterm", "final", "quiz"] as const;
+
+export type ExamType = (typeof examTypes)[number];
+
 export const userRoles = ["student", "reviewer", "admin"] as const;
 
 export type UserRole = (typeof userRoles)[number];
@@ -209,4 +213,81 @@ export type CommentDocumentResponse = {
 
 export type ReportDocumentResponse = {
   report: DocumentReportItem;
+};
+
+export type SubjectOption = {
+  id: string;
+  name: string;
+  majorId: string | null;
+  majorName: string;
+  enrolled: boolean;
+};
+
+export type ExamItem = {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  majorName: string;
+  name: string;
+  examType: ExamType;
+  examDate: string;
+  daysUntil: number;
+  termLabel: string | null;
+  location: string | null;
+  enrolled: boolean;
+};
+
+export type CourseEnrollmentItem = {
+  id: string;
+  subjectId: string;
+  subjectName: string;
+  majorName: string;
+  termLabel: string | null;
+  emailReminderEnabled: boolean;
+  upcomingExamCount: number;
+  nextExam: ExamItem | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ExamDocumentRecommendation = {
+  document: DocumentItem;
+  score: number;
+  reason: string;
+};
+
+export type QuickReviewSection = {
+  exam: ExamItem;
+  documents: ExamDocumentRecommendation[];
+};
+
+export type SurvivalKitSection = {
+  subjectId: string;
+  subjectName: string;
+  majorName: string;
+  nextExam: ExamItem | null;
+  documents: ExamDocumentRecommendation[];
+};
+
+export type PersonalizationNotificationSummary = {
+  enabledCount: number;
+  nextReminderAt: string | null;
+  message: string;
+};
+
+export type PersonalizationDashboardResponse = {
+  enrolledSubjects: CourseEnrollmentItem[];
+  availableSubjects: SubjectOption[];
+  upcomingExams: ExamItem[];
+  quickReview: QuickReviewSection[];
+  survivalKits: SurvivalKitSection[];
+  notifications: PersonalizationNotificationSummary;
+};
+
+export type UpsertCourseEnrollmentResponse = {
+  enrollment: CourseEnrollmentItem;
+};
+
+export type DeleteCourseEnrollmentResponse = {
+  deleted: boolean;
 };
