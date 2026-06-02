@@ -1,4 +1,4 @@
-import type { DocumentItem } from "@itss/shared";
+import type { AuthUser, DocumentCommentItem, DocumentItem, ReportReason, ReviewHistoryItem } from "@itss/shared";
 import {
   ArrowLeft,
   Bookmark,
@@ -8,10 +8,11 @@ import {
   ExternalLink,
   Eye,
   FileText,
+  Flag,
+  LogIn,
   MessageCircle,
   Share2,
   Star,
-  ThumbsUp,
   User,
   X
 } from "lucide-react";
@@ -19,37 +20,39 @@ import { useEffect, useState } from "react";
 import { LargeVerificationSeal } from "../components/LargeVerificationSeal";
 import { VerificationBadge } from "../components/VerificationBadge";
 import { verificationLevels } from "../data/documentMeta";
-import { getAssetUrl, getDocumentById } from "../lib/api";
+import { addDocumentComment, getAssetUrl, getDocumentById, rateDocument, reportDocument } from "../lib/api";
 
 type DetailPageProps = {
   documentId: string;
+  currentUser: AuthUser | null;
+  accessToken: string | null;
   onBack: () => void;
+  onLogin: () => void;
 };
 
-const sampleReviews = [
-  {
-    name: "Nguyễn Minh Tuấn",
-    year: "Sinh viên năm 3",
-    rating: 5,
-    date: "2 tuần trước",
-    content: "Tài liệu rất chi tiết, giải thích dễ hiểu. Các ví dụ thực tế hữu ích cho kỳ thi.",
-    likes: 23
-  },
-  {
-    name: "Trần Thu Hà",
-    year: "Sinh viên năm 2",
-    rating: 4,
-    date: "1 tháng trước",
-    content: "Nội dung tốt, phần bài tập cuối chương rõ ràng. Mong có thêm lời giải cho các bài khó.",
-    likes: 12
-  }
-];
+const reportReasonLabels: Record<ReportReason, string> = {
+  inaccurate: "Sai nội dung",
+  outdated: "Đã lỗi thời",
+  copyright: "Bản quyền",
+  inappropriate: "Không phù hợp",
+  spam: "Spam",
+  other: "Khác"
+};
 
-export function DetailPage({ documentId, onBack }: DetailPageProps) {
+export function DetailPage({ documentId, currentUser, accessToken, onBack, onLogin }: DetailPageProps) {
   const [document, setDocument] = useState<DocumentItem | null>(null);
+  const [comments, setComments] = useState<DocumentCommentItem[]>([]);
+  const [reviewHistory, setReviewHistory] = useState<ReviewHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [ratingValue, setRatingValue] = useState(5);
+  const [commentText, setCommentText] = useState("");
+  const [reportReason, setReportReason] = useState<ReportReason>("inaccurate");
+  const [reportDetail, setReportDetail] = useState("");
+  const [interactionMessage, setInteractionMessage] = useState<string | null>(null);
+  const [interactionError, setInteractionError] = useState<string | null>(null);
+  const [isSubmittingInteraction, setIsSubmittingInteraction] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -58,7 +61,11 @@ export function DetailPage({ documentId, onBack }: DetailPageProps) {
     setErrorMessage(null);
 
     getDocumentById(documentId, controller.signal)
-      .then((payload) => setDocument(payload.document))
+      .then((payload) => {
+        setDocument(payload.document);
+        setComments(payload.comments);
+        setReviewHistory(payload.reviewHistory);
+      })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setErrorMessage(error instanceof Error ? error.message : "Không thể tải chi tiết tài liệu.");
@@ -94,6 +101,79 @@ export function DetailPage({ documentId, onBack }: DetailPageProps) {
   const openFile = () => {
     if (document.fileUrl) {
       window.open(getAssetUrl(document.fileUrl), "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const requireLogin = () => {
+    if (accessToken && currentUser) return true;
+
+    onLogin();
+    return false;
+  };
+
+  const submitRating = async () => {
+    if (!requireLogin() || !accessToken) return;
+
+    setIsSubmittingInteraction(true);
+    setInteractionError(null);
+    setInteractionMessage(null);
+
+    try {
+      const result = await rateDocument(document.id, ratingValue, accessToken);
+      setDocument(result.document);
+      setInteractionMessage("Rating da duoc luu.");
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "Khong the luu rating.");
+    } finally {
+      setIsSubmittingInteraction(false);
+    }
+  };
+
+  const submitComment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!requireLogin() || !accessToken) return;
+
+    const content = commentText.trim();
+
+    if (content.length < 2) {
+      setInteractionError("Binh luan can co noi dung.");
+      return;
+    }
+
+    setIsSubmittingInteraction(true);
+    setInteractionError(null);
+    setInteractionMessage(null);
+
+    try {
+      const result = await addDocumentComment(document.id, content, accessToken);
+      setComments((current) => [result.comment, ...current]);
+      setCommentText("");
+      setInteractionMessage("Binh luan da duoc them.");
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "Khong the gui binh luan.");
+    } finally {
+      setIsSubmittingInteraction(false);
+    }
+  };
+
+  const submitReport = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!requireLogin() || !accessToken) return;
+
+    setIsSubmittingInteraction(true);
+    setInteractionError(null);
+    setInteractionMessage(null);
+
+    try {
+      await reportDocument(document.id, reportReason, reportDetail.trim(), accessToken);
+      setReportDetail("");
+      setInteractionMessage("Bao cao da duoc ghi nhan.");
+    } catch (error) {
+      setInteractionError(error instanceof Error ? error.message : "Khong the gui bao cao.");
+    } finally {
+      setIsSubmittingInteraction(false);
     }
   };
 
@@ -171,33 +251,59 @@ export function DetailPage({ documentId, onBack }: DetailPageProps) {
                 Xem tất cả ({document.reviews})
               </button>
             </div>
-            {sampleReviews.map((review) => (
-              <div className="review-item" key={review.name}>
-                <div className="review-item__header">
-                  <div className="avatar">{review.name.split(" ").at(-1)?.charAt(0)}</div>
-                  <div>
-                    <strong>{review.name}</strong>
-                    <span>
-                      {review.year} · {review.date}
-                    </span>
-                  </div>
-                  <div className="review-stars">
-                    {Array.from({ length: 5 }).map((_, index) => (
-                      <Star key={index} size={13} fill={index < review.rating ? "currentColor" : "transparent"} />
-                    ))}
-                  </div>
-                </div>
-                <p>{review.content}</p>
-                <div className="review-actions">
-                  <button type="button">
-                    <ThumbsUp size={13} /> Hữu ích ({review.likes})
-                  </button>
-                  <button type="button">
-                    <MessageCircle size={13} /> Trả lời
-                  </button>
-                </div>
+            <div className="rating-composer">
+              <div className="rating-control" aria-label="Chọn số sao">
+                {Array.from({ length: 5 }).map((_, index) => {
+                  const value = index + 1;
+
+                  return (
+                    <button
+                      className={value <= ratingValue ? "is-active" : ""}
+                      key={value}
+                      type="button"
+                      onClick={() => setRatingValue(value)}
+                    >
+                      <Star size={17} fill={value <= ratingValue ? "currentColor" : "transparent"} />
+                    </button>
+                  );
+                })}
               </div>
-            ))}
+              <button className="secondary-button" type="button" disabled={isSubmittingInteraction} onClick={submitRating}>
+                <Star size={16} /> Lưu rating
+              </button>
+            </div>
+
+            <form className="comment-form" onSubmit={submitComment}>
+              <label className="field">
+                <span>Bình luận</span>
+                <textarea rows={3} value={commentText} onChange={(event) => setCommentText(event.target.value)} />
+              </label>
+              <button className="primary-button" type="submit" disabled={isSubmittingInteraction}>
+                <MessageCircle size={16} /> Gửi bình luận
+              </button>
+            </form>
+
+            {interactionMessage ? <div className="form-success">{interactionMessage}</div> : null}
+            {interactionError ? <div className="form-error">{interactionError}</div> : null}
+
+            {comments.length > 0 ? (
+              comments.map((comment) => (
+                <div className="review-item" key={comment.id}>
+                  <div className="review-item__header">
+                    <div className="avatar">{comment.authorName.split(" ").at(-1)?.charAt(0)}</div>
+                    <div>
+                      <strong>{comment.authorName}</strong>
+                      <span>
+                        {comment.authorRole} · {formatRelativeDate(comment.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <p>{comment.content}</p>
+                </div>
+              ))
+            ) : (
+              <p className="muted-text">Chưa có bình luận nào cho tài liệu này.</p>
+            )}
           </section>
         </article>
 
@@ -227,6 +333,55 @@ export function DetailPage({ documentId, onBack }: DetailPageProps) {
             <InfoItem label="Định dạng" value={document.format} />
             <InfoItem label="Ngôn ngữ" value="Tiếng Việt" />
             <InfoItem label="Năm phát hành" value={`${document.year}`} />
+          </section>
+
+          <section className="content-section compact">
+            <h2>Review history</h2>
+            {reviewHistory.length > 0 ? (
+              <div className="trust-history">
+                {reviewHistory.map((review) => (
+                  <div key={review.id}>
+                    <VerificationBadge level={review.verificationLevel} size="sm" />
+                    <strong>{review.decision}</strong>
+                    <span>
+                      {review.reviewerName} · {formatRelativeDate(review.createdAt)}
+                    </span>
+                    {review.note ? <p>{review.note}</p> : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted-text">Chưa có lịch sử review.</p>
+            )}
+          </section>
+
+          <section className="content-section compact">
+            <h2>Báo cáo tài liệu</h2>
+            {!currentUser ? (
+              <button className="secondary-button" type="button" onClick={onLogin}>
+                <LogIn size={16} /> Đăng nhập để báo cáo
+              </button>
+            ) : (
+              <form className="report-form" onSubmit={submitReport}>
+                <label className="field">
+                  <span>Lý do</span>
+                  <select value={reportReason} onChange={(event) => setReportReason(event.target.value as ReportReason)}>
+                    {Object.entries(reportReasonLabels).map(([reason, label]) => (
+                      <option key={reason} value={reason}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Chi tiết</span>
+                  <textarea rows={3} value={reportDetail} onChange={(event) => setReportDetail(event.target.value)} />
+                </label>
+                <button className="secondary-button" type="submit" disabled={isSubmittingInteraction}>
+                  <Flag size={16} /> Gửi báo cáo
+                </button>
+              </form>
+            )}
           </section>
         </aside>
       </main>
@@ -299,4 +454,31 @@ function InfoItem({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function formatRelativeDate(value: string) {
+  const timestamp = new Date(value).getTime();
+
+  if (!Number.isFinite(timestamp)) return "vừa xong";
+
+  const diffInSeconds = Math.max(1, Math.round((Date.now() - timestamp) / 1000));
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+    ["year", 60 * 60 * 24 * 365],
+    ["month", 60 * 60 * 24 * 30],
+    ["week", 60 * 60 * 24 * 7],
+    ["day", 60 * 60 * 24],
+    ["hour", 60 * 60],
+    ["minute", 60]
+  ];
+  const formatter = new Intl.RelativeTimeFormat("vi", {
+    numeric: "auto"
+  });
+
+  for (const [unit, seconds] of units) {
+    if (diffInSeconds >= seconds) {
+      return formatter.format(-Math.floor(diffInSeconds / seconds), unit);
+    }
+  }
+
+  return "vừa xong";
 }

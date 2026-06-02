@@ -39,12 +39,34 @@ enum VerificationStatus {
   pending
   approved
   rejected
+  changes_requested
 }
 
 enum DocumentVisibility {
   public
   private
   hidden
+}
+
+enum ReviewDecision {
+  approved
+  rejected
+  changes_requested
+}
+
+enum ReportReason {
+  inaccurate
+  outdated
+  copyright
+  inappropriate
+  spam
+  other
+}
+
+enum ReportStatus {
+  open
+  resolved
+  dismissed
 }
 
 model User {
@@ -60,6 +82,10 @@ model User {
   institution   Institution? @relation(fields: [institutionId], references: [id])
   major         Major?       @relation(fields: [majorId], references: [id])
   documents     Document[]   @relation("UploadedDocuments")
+  reviews       DocumentReview[] @relation("DocumentReviews")
+  ratings       DocumentRating[]
+  comments      DocumentComment[]
+  reports       DocumentReport[]
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
@@ -148,6 +174,10 @@ model Document {
   institution        Institution?         @relation(fields: [institutionId], references: [id])
   major              Major?               @relation(fields: [majorId], references: [id])
   subject            Subject?             @relation(fields: [subjectId], references: [id])
+  reviewHistory      DocumentReview[]
+  ratings            DocumentRating[]
+  comments           DocumentComment[]
+  reports            DocumentReport[]
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @updatedAt @map("updated_at")
 
@@ -158,4 +188,70 @@ model Document {
   @@index([downloadCount])
   @@index([uploaderId])
   @@map("documents")
+}
+
+model DocumentReview {
+  id                String            @id @default(cuid())
+  documentId        String            @map("document_id")
+  reviewerId        String            @map("reviewer_id")
+  decision          ReviewDecision
+  verificationLevel VerificationLevel @default(unverified) @map("verification_level")
+  note              String?           @db.Text
+  document          Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reviewer          User              @relation("DocumentReviews", fields: [reviewerId], references: [id], onDelete: Restrict)
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  @@index([documentId, createdAt])
+  @@index([reviewerId, createdAt])
+  @@index([decision])
+  @@map("document_reviews")
+}
+
+model DocumentRating {
+  id         String   @id @default(cuid())
+  documentId String   @map("document_id")
+  userId     String   @map("user_id")
+  rating     Int
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@index([userId])
+  @@map("document_ratings")
+}
+
+model DocumentComment {
+  id         String   @id @default(cuid())
+  documentId String   @map("document_id")
+  userId     String   @map("user_id")
+  content    String   @db.Text
+  isHidden   Boolean  @default(false) @map("is_hidden")
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([documentId, isHidden, createdAt])
+  @@index([userId])
+  @@map("document_comments")
+}
+
+model DocumentReport {
+  id         String       @id @default(cuid())
+  documentId String       @map("document_id")
+  reporterId String       @map("reporter_id")
+  reason     ReportReason
+  detail     String?      @db.Text
+  status     ReportStatus @default(open)
+  document   Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  reporter   User         @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  @@index([documentId, status])
+  @@index([reporterId, status])
+  @@map("document_reports")
 }

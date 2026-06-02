@@ -4,6 +4,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { SearchPage } from "./pages/SearchPage";
 import { DetailPage } from "./pages/DetailPage";
 import { UploadPage } from "./pages/UploadPage";
+import { ReviewerDashboardPage } from "./pages/ReviewerDashboardPage";
 import { getCurrentUser, logoutUser } from "./lib/api";
 
 type Route =
@@ -11,7 +12,8 @@ type Route =
   | { name: "document-detail"; documentId: string }
   | { name: "login" }
   | { name: "register" }
-  | { name: "upload" };
+  | { name: "upload" }
+  | { name: "review" };
 
 const authTokenStorageKey = "itss.accessToken";
 
@@ -103,7 +105,15 @@ export default function App() {
   };
 
   if (route.name === "document-detail") {
-    return <DetailPage documentId={route.documentId} onBack={backToSearch} />;
+    return (
+      <DetailPage
+        documentId={route.documentId}
+        currentUser={currentUser}
+        accessToken={accessToken}
+        onBack={backToSearch}
+        onLogin={() => navigate("/login")}
+      />
+    );
   }
 
   if (route.name === "login" || route.name === "register") {
@@ -129,6 +139,18 @@ export default function App() {
     );
   }
 
+  if (route.name === "review") {
+    return (
+      <ReviewerDashboardPage
+        currentUser={currentUser}
+        accessToken={accessToken}
+        onBack={() => navigate("/documents")}
+        onLogin={() => navigate("/login")}
+        onSelectDocument={openUploadedDocument}
+      />
+    );
+  }
+
   return (
     <SearchPage
       currentUser={currentUser}
@@ -137,6 +159,7 @@ export default function App() {
       onNavigateLogin={() => navigate("/login")}
       onNavigateRegister={() => navigate("/register")}
       onNavigateUpload={() => navigate("/upload")}
+      onNavigateReview={() => navigate("/review")}
       onLogout={logout}
     />
   );
@@ -146,6 +169,7 @@ function readRoute(): Route {
   if (window.location.pathname === "/login") return { name: "login" };
   if (window.location.pathname === "/register") return { name: "register" };
   if (window.location.pathname === "/upload") return { name: "upload" };
+  if (window.location.pathname === "/review") return { name: "review" };
 
   const match = window.location.pathname.match(/^\/documents\/([^/]+)$/);
 

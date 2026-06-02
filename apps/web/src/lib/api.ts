@@ -1,10 +1,17 @@
 import type {
   AuthResponse,
+  CommentDocumentResponse,
   MeResponse,
   DocumentDetailResponse,
   DocumentListResponse,
   DocumentSort,
   DocumentType,
+  RatingDocumentResponse,
+  ReportDocumentResponse,
+  ReportReason,
+  ReviewDecision,
+  ReviewDocumentResponse,
+  ReviewQueueResponse,
   UploadDocumentResponse,
   UploadOptionsResponse,
   VerificationLevel
@@ -79,6 +86,65 @@ export async function uploadDocument(formData: FormData, token: string) {
   return fetchJson<UploadDocumentResponse>("/api/documents", {
     method: "POST",
     body: formData,
+    token
+  });
+}
+
+export async function getReviewQueue(token: string, signal?: AbortSignal) {
+  return fetchJson<ReviewQueueResponse>("/api/documents/review/queue", {
+    signal,
+    token
+  });
+}
+
+export async function reviewDocument(
+  documentId: string,
+  payload: {
+    decision: ReviewDecision;
+    verificationLevel: VerificationLevel;
+    note?: string;
+  },
+  token: string
+) {
+  return fetchJson<ReviewDocumentResponse>(`/api/documents/${encodeURIComponent(documentId)}/review`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    token
+  });
+}
+
+export async function rateDocument(documentId: string, rating: number, token: string) {
+  return fetchJson<RatingDocumentResponse>(`/api/documents/${encodeURIComponent(documentId)}/rating`, {
+    method: "POST",
+    body: JSON.stringify({ rating }),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    token
+  });
+}
+
+export async function addDocumentComment(documentId: string, content: string, token: string) {
+  return fetchJson<CommentDocumentResponse>(`/api/documents/${encodeURIComponent(documentId)}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+    headers: {
+      "Content-Type": "application/json"
+    },
+    token
+  });
+}
+
+export async function reportDocument(documentId: string, reason: ReportReason, detail: string, token: string) {
+  return fetchJson<ReportDocumentResponse>(`/api/documents/${encodeURIComponent(documentId)}/reports`, {
+    method: "POST",
+    body: JSON.stringify({ reason, detail }),
+    headers: {
+      "Content-Type": "application/json"
+    },
     token
   });
 }

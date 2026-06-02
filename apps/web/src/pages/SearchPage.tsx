@@ -6,7 +6,7 @@ import type {
   DocumentType,
   VerificationLevel
 } from "@itss/shared";
-import { ChevronLeft, ChevronRight, Filter, LogIn, LogOut, Search, UploadCloud, UserPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Filter, LogIn, LogOut, Search, ShieldCheck, UploadCloud, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DocumentCard } from "../components/DocumentCard";
 import { FilterSidebar } from "../components/FilterSidebar";
@@ -41,6 +41,7 @@ type SearchPageProps = {
   onNavigateLogin: () => void;
   onNavigateRegister: () => void;
   onNavigateUpload: () => void;
+  onNavigateReview: () => void;
   onLogout: () => void;
 };
 
@@ -62,6 +63,7 @@ export function SearchPage({
   onNavigateLogin,
   onNavigateRegister,
   onNavigateUpload,
+  onNavigateReview,
   onLogout
 }: SearchPageProps) {
   const [queryState, setQueryState] = useState<QueryState>(() => readQueryStateFromUrl());
@@ -219,6 +221,11 @@ export function SearchPage({
             {!isAuthLoading && currentUser ? (
               <>
                 <span className="auth-chip">{currentUser.fullName}</span>
+                {currentUser.role === "reviewer" || currentUser.role === "admin" ? (
+                  <button className="ghost-button" type="button" onClick={onNavigateReview}>
+                    <ShieldCheck size={16} /> Review
+                  </button>
+                ) : null}
                 <button className="primary-button" type="button" onClick={onNavigateUpload}>
                   <UploadCloud size={16} /> Upload
                 </button>

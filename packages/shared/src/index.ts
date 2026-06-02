@@ -2,6 +2,20 @@ export const verificationLevels = ["unverified", "bronze", "silver", "gold"] as 
 
 export type VerificationLevel = (typeof verificationLevels)[number];
 
+export const verificationStatuses = ["pending", "approved", "rejected", "changes_requested"] as const;
+
+export type VerificationStatus = (typeof verificationStatuses)[number];
+
+export const reviewDecisions = ["approved", "rejected", "changes_requested"] as const;
+
+export type ReviewDecision = (typeof reviewDecisions)[number];
+
+export const reportReasons = ["inaccurate", "outdated", "copyright", "inappropriate", "spam", "other"] as const;
+
+export type ReportReason = (typeof reportReasons)[number];
+
+export type ReportStatus = "open" | "resolved" | "dismissed";
+
 export const userRoles = ["student", "reviewer", "admin"] as const;
 
 export type UserRole = (typeof userRoles)[number];
@@ -58,7 +72,7 @@ export type DocumentItem = {
   instructorName: string | null;
   termLabel: string | null;
   examName: string | null;
-  verificationStatus: "pending" | "approved" | "rejected";
+  verificationStatus: VerificationStatus;
   fileUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -84,10 +98,6 @@ export type DocumentListResponse = {
   items: DocumentItem[];
   pagination: PaginationMeta;
   facets: DocumentFacets;
-};
-
-export type DocumentDetailResponse = {
-  document: DocumentItem;
 };
 
 export type AuthUser = {
@@ -118,4 +128,85 @@ export type UploadOptionsResponse = {
 
 export type UploadDocumentResponse = {
   document: DocumentItem;
+};
+
+export type ReviewHistoryItem = {
+  id: string;
+  reviewerName: string;
+  reviewerRole: UserRole;
+  decision: ReviewDecision;
+  verificationLevel: VerificationLevel;
+  note: string | null;
+  createdAt: string;
+};
+
+export type DocumentRatingItem = {
+  id: string;
+  userId: string;
+  rating: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DocumentCommentItem = {
+  id: string;
+  authorName: string;
+  authorRole: UserRole;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DocumentReportItem = {
+  id: string;
+  reason: ReportReason;
+  detail: string | null;
+  status: ReportStatus;
+  createdAt: string;
+};
+
+export type DocumentDetailResponse = {
+  document: DocumentItem;
+  comments: DocumentCommentItem[];
+  reviewHistory: ReviewHistoryItem[];
+};
+
+export type ReviewQueueItem = {
+  document: DocumentItem;
+  uploaderName: string | null;
+  pendingSince: string;
+  lastReview: ReviewHistoryItem | null;
+  reportCount: number;
+  commentCount: number;
+};
+
+export type ReviewQueueSummary = {
+  pending: number;
+  changesRequested: number;
+  approved: number;
+  rejected: number;
+  openReports: number;
+};
+
+export type ReviewQueueResponse = {
+  items: ReviewQueueItem[];
+  summary: ReviewQueueSummary;
+};
+
+export type ReviewDocumentResponse = {
+  document: DocumentItem;
+  review: ReviewHistoryItem;
+};
+
+export type RatingDocumentResponse = {
+  document: DocumentItem;
+  rating: DocumentRatingItem;
+};
+
+export type CommentDocumentResponse = {
+  comment: DocumentCommentItem;
+};
+
+export type ReportDocumentResponse = {
+  report: DocumentReportItem;
 };

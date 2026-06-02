@@ -67,6 +67,20 @@ Nếu API không chạy ở `http://localhost:3000`, tạo `apps/web/.env`:
 VITE_API_BASE_URL=http://localhost:3000
 ```
 
+## Tài khoản demo
+
+Sau khi chạy seed, có thể dùng các tài khoản sau để kiểm thử:
+
+```text
+student@veritas.local / Password123
+reviewer@veritas.local / Password123
+admin@veritas.local / Password123
+```
+
+- `student`: upload tài liệu, rating, bình luận và báo cáo tài liệu.
+- `reviewer`: mở `/review` để approve, reject hoặc request changes.
+- `admin`: có toàn quyền reviewer và có thể cấp badge gold.
+
 ## API Phase 2-3
 
 ```text

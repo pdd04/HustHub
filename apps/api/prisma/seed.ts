@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { PrismaClient, type DocumentType, type VerificationLevel, type VerificationStatus } from "@prisma/client";
+import { hashPassword } from "../src/auth/password.js";
 
 const prisma = new PrismaClient();
 
@@ -19,6 +20,7 @@ type DemoDocument = {
   title: string;
   description: string;
   authorName: string;
+  uploaderEmail?: string;
   institutionCode: string;
   majorCode: string;
   subjectCode: string;
@@ -26,6 +28,10 @@ type DemoDocument = {
   year: number;
   pages: number;
   fileSize: number;
+  termLabel?: string;
+  instructorName?: string;
+  examName?: string;
+  tags?: string[];
   verificationLevel: VerificationLevel;
   verificationStatus: VerificationStatus;
   ratingAvg: string;
@@ -35,6 +41,28 @@ type DemoDocument = {
 };
 
 const demoInstitutionCode = "VERITAS-DEMO";
+const demoPassword = "Password123";
+
+const demoUsers = [
+  {
+    email: "student@veritas.local",
+    fullName: "Demo Student",
+    studentCode: "SV-DEMO-001",
+    role: "student" as const
+  },
+  {
+    email: "reviewer@veritas.local",
+    fullName: "Demo Reviewer",
+    studentCode: "RV-DEMO-001",
+    role: "reviewer" as const
+  },
+  {
+    email: "admin@veritas.local",
+    fullName: "Academic Admin",
+    studentCode: "AD-DEMO-001",
+    role: "admin" as const
+  }
+];
 
 const institutions = [
   { code: demoInstitutionCode, name: "Veritas Demo Academic Network" },
@@ -258,6 +286,54 @@ const documents: DemoDocument[] = [
     ratingCount: 312,
     viewCount: 12980,
     downloadCount: 5210
+  },
+  {
+    id: "doc-pending-algorithm-cheatsheet",
+    title: "Algorithm quick review sheet",
+    description: "Student contributed summary for sorting, graph traversal, dynamic programming and common final exam patterns.",
+    authorName: "Demo Student",
+    uploaderEmail: "student@veritas.local",
+    institutionCode: "VNU",
+    majorCode: "CNTT",
+    subjectCode: "ALG",
+    documentType: "summary_note",
+    year: 2026,
+    pages: 24,
+    fileSize: 980_000,
+    termLabel: "HK2 2025-2026",
+    instructorName: "TS. Nguyen Minh",
+    examName: "Final",
+    tags: ["algorithm", "final", "review"],
+    verificationLevel: "unverified",
+    verificationStatus: "pending",
+    ratingAvg: "0.00",
+    ratingCount: 0,
+    viewCount: 12,
+    downloadCount: 3
+  },
+  {
+    id: "doc-changes-requested-db-lab",
+    title: "Database lab answer collection",
+    description: "Draft answer collection for SQL labs that needs clearer source attribution before approval.",
+    authorName: "Demo Student",
+    uploaderEmail: "student@veritas.local",
+    institutionCode: "HUST",
+    majorCode: "CNTT",
+    subjectCode: "DB",
+    documentType: "exercise",
+    year: 2026,
+    pages: 31,
+    fileSize: 1_240_000,
+    termLabel: "HK2 2025-2026",
+    instructorName: "ThS. Tran Thu",
+    examName: "Lab",
+    tags: ["sql", "lab", "answer"],
+    verificationLevel: "unverified",
+    verificationStatus: "changes_requested",
+    ratingAvg: "0.00",
+    ratingCount: 0,
+    viewCount: 6,
+    downloadCount: 1
   }
 ];
 
@@ -348,10 +424,47 @@ async function main() {
     subjectRecords.set(subject.code, record);
   }
 
+  const userRecords = new Map<string, { id: string }>();
+  const demoUserPasswordHash = await hashPassword(demoPassword);
+  const defaultMajor = majorRecords.get("CNTT");
+
+  for (const user of demoUsers) {
+    const record = await prisma.user.upsert({
+      where: {
+        email: user.email
+      },
+      update: {
+        fullName: user.fullName,
+        studentCode: user.studentCode,
+        institutionId: demoInstitution.id,
+        majorId: defaultMajor?.id,
+        role: user.role,
+        status: "active"
+      },
+      create: {
+        email: user.email,
+        passwordHash: demoUserPasswordHash,
+        fullName: user.fullName,
+        studentCode: user.studentCode,
+        institutionId: demoInstitution.id,
+        majorId: defaultMajor?.id,
+        role: user.role,
+        status: "active"
+      },
+      select: {
+        id: true
+      }
+    });
+
+    userRecords.set(user.email, record);
+  }
+
   for (const document of documents) {
     const institution = institutionRecords.get(document.institutionCode);
     const major = majorRecords.get(document.majorCode);
     const subject = subjectRecords.get(document.subjectCode);
+    const uploader = document.uploaderEmail ? userRecords.get(document.uploaderEmail) : null;
+    const visibility = document.verificationStatus === "rejected" ? "hidden" : "public";
 
     if (!institution || !major || !subject) {
       throw new Error(`Missing relation for ${document.id}.`);
@@ -365,18 +478,23 @@ async function main() {
         title: document.title,
         description: document.description,
         authorName: document.authorName,
+        uploaderId: uploader?.id,
         institutionId: institution.id,
         majorId: major.id,
         subjectId: subject.id,
         documentType: document.documentType,
         year: document.year,
         pages: document.pages,
+        termLabel: document.termLabel,
+        instructorName: document.instructorName,
+        examName: document.examName,
+        tags: document.tags ?? [],
         fileSize: document.fileSize,
         mimeType: "application/pdf",
         fileUrl: `/files/${document.id}.pdf`,
         verificationLevel: document.verificationLevel,
         verificationStatus: document.verificationStatus,
-        visibility: "public",
+        visibility,
         ratingAvg: document.ratingAvg,
         ratingCount: document.ratingCount,
         viewCount: document.viewCount,
@@ -387,18 +505,23 @@ async function main() {
         title: document.title,
         description: document.description,
         authorName: document.authorName,
+        uploaderId: uploader?.id,
         institutionId: institution.id,
         majorId: major.id,
         subjectId: subject.id,
         documentType: document.documentType,
         year: document.year,
         pages: document.pages,
+        termLabel: document.termLabel,
+        instructorName: document.instructorName,
+        examName: document.examName,
+        tags: document.tags ?? [],
         fileSize: document.fileSize,
         mimeType: "application/pdf",
         fileUrl: `/files/${document.id}.pdf`,
         verificationLevel: document.verificationLevel,
         verificationStatus: document.verificationStatus,
-        visibility: "public",
+        visibility,
         ratingAvg: document.ratingAvg,
         ratingCount: document.ratingCount,
         viewCount: document.viewCount,

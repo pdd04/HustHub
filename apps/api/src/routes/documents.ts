@@ -1,4 +1,5 @@
 import type {
+  CommentDocumentResponse,
   DocumentDetailResponse,
   DocumentFacets,
   DocumentItem,
@@ -7,9 +8,17 @@ import type {
   DocumentType,
   DocumentTypeFilterOption,
   FilterOption,
+  RatingDocumentResponse,
+  ReportDocumentResponse,
+  ReportReason,
+  ReviewDecision,
+  ReviewDocumentResponse,
+  ReviewHistoryItem,
+  ReviewQueueResponse,
   UploadDocumentResponse,
   UploadOptionsResponse,
-  VerificationLevel
+  VerificationLevel,
+  VerificationStatus
 } from "@itss/shared";
 import { Prisma } from "@prisma/client";
 import { Router, type NextFunction, type Request, type Response } from "express";
@@ -36,8 +45,19 @@ const documentTypeValues = [
 ] as const satisfies readonly DocumentType[];
 
 const verificationLevelValues = ["unverified", "bronze", "silver", "gold"] as const satisfies readonly VerificationLevel[];
+const verificationStatusValues = [
+  "pending",
+  "approved",
+  "rejected",
+  "changes_requested"
+] as const satisfies readonly VerificationStatus[];
+const publicDocumentStatuses = ["approved", "pending"] as const satisfies readonly VerificationStatus[];
+const detailDocumentStatuses = ["approved", "pending", "changes_requested"] as const satisfies readonly VerificationStatus[];
+const reviewDecisionValues = ["approved", "rejected", "changes_requested"] as const satisfies readonly ReviewDecision[];
+const reportReasonValues = ["inaccurate", "outdated", "copyright", "inappropriate", "spam", "other"] as const satisfies readonly ReportReason[];
 const sortValues = ["relevance", "newest", "popular", "rating"] as const satisfies readonly DocumentSort[];
 const uploadAllowedRoles = ["student", "reviewer", "admin"] as const;
+const reviewerRoles = ["reviewer", "admin"] as const;
 const allowedFileExtensions = new Set([".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt"]);
 const allowedMimeTypes = new Set([
   "application/pdf",
@@ -135,6 +155,25 @@ type UploadDocumentBody = {
   examName: string | null;
   pages: number | null;
   tags: string[];
+};
+
+type ReviewDocumentBody = {
+  decision: ReviewDecision;
+  verificationLevel: VerificationLevel;
+  note: string | null;
+};
+
+type RatingDocumentBody = {
+  rating: number;
+};
+
+type CommentDocumentBody = {
+  content: string;
+};
+
+type ReportDocumentBody = {
+  reason: ReportReason;
+  detail: string | null;
 };
 
 router.get(
@@ -269,18 +308,366 @@ router.post(
 );
 
 router.get(
+  "/review/queue",
+  authenticate,
+  requireRole([...reviewerRoles]),
+  asyncHandler(async (request, response) => {
+    const statuses = parseReviewQueueStatuses(request.query.status);
+    const [documents, summary] = await Promise.all([
+      prisma.document.findMany({
+        where: {
+          verificationStatus: {
+            in: statuses
+          }
+        },
+        include: {
+          ...documentInclude,
+          reviewHistory: {
+            orderBy: {
+              createdAt: "desc"
+            },
+            take: 1,
+            include: {
+              reviewer: {
+                select: {
+                  fullName: true,
+                  role: true
+                }
+              }
+            }
+          },
+          _count: {
+            select: {
+              comments: true,
+              reports: true
+            }
+          }
+        },
+        orderBy: [
+          {
+            createdAt: "asc"
+          }
+        ],
+        take: 50
+      }),
+      getReviewQueueSummary()
+    ]);
+    const payload: ReviewQueueResponse = {
+      items: documents.map((document) => ({
+        document: mapDocumentItem(document),
+        uploaderName: document.uploader?.fullName ?? null,
+        pendingSince: document.createdAt.toISOString(),
+        lastReview: document.reviewHistory[0] ? mapReviewHistoryItem(document.reviewHistory[0]) : null,
+        reportCount: document._count.reports,
+        commentCount: document._count.comments
+      })),
+      summary
+    };
+
+    response.status(200).json(payload);
+  })
+);
+
+router.post(
+  "/:id/review",
+  authenticate,
+  requireRole([...reviewerRoles]),
+  asyncHandler(async (request, response) => {
+    const user = (request as AuthenticatedRequest).currentUser;
+    const documentId = readString(request.params.id);
+    const payload = parseReviewDocumentBody(request.body);
+
+    if (!payload) {
+      response.status(400).json({ message: "Vui lòng chọn quyết định review và ghi chú hợp lệ." });
+      return;
+    }
+
+    if (payload.verificationLevel === "gold" && user.role !== "admin") {
+      response.status(403).json({ message: "Chỉ admin học thuật mới có thể cấp badge vàng." });
+      return;
+    }
+
+    const result = await prisma.$transaction(async (transaction) => {
+      const existingDocument = await transaction.document.findUnique({
+        where: {
+          id: documentId
+        },
+        select: {
+          id: true
+        }
+      });
+
+      if (!existingDocument) return null;
+
+      const updatedDocument = await transaction.document.update({
+        where: {
+          id: documentId
+        },
+        data: buildReviewDocumentUpdate(payload),
+        include: documentInclude
+      });
+      const review = await transaction.documentReview.create({
+        data: {
+          documentId,
+          reviewerId: user.id,
+          decision: payload.decision,
+          verificationLevel: payload.verificationLevel,
+          note: payload.note
+        },
+        include: {
+          reviewer: {
+            select: {
+              fullName: true,
+              role: true
+            }
+          }
+        }
+      });
+
+      return {
+        document: updatedDocument,
+        review
+      };
+    });
+
+    if (!result) {
+      response.status(404).json({ message: "Không tìm thấy tài liệu cần review." });
+      return;
+    }
+
+    const responsePayload: ReviewDocumentResponse = {
+      document: mapDocumentItem(result.document),
+      review: mapReviewHistoryItem(result.review)
+    };
+
+    response.status(200).json(responsePayload);
+  })
+);
+
+router.post(
+  "/:id/rating",
+  authenticate,
+  requireRole([...uploadAllowedRoles]),
+  asyncHandler(async (request, response) => {
+    const user = (request as AuthenticatedRequest).currentUser;
+    const documentId = readString(request.params.id);
+    const payload = parseRatingDocumentBody(request.body);
+
+    if (!payload) {
+      response.status(400).json({ message: "Vui lòng chọn số sao từ 1 đến 5." });
+      return;
+    }
+
+    const result = await prisma.$transaction(async (transaction) => {
+      const document = await transaction.document.findFirst({
+        where: buildPublicDocumentWhere(documentId),
+        select: {
+          id: true,
+          verificationLevel: true,
+          verificationStatus: true
+        }
+      });
+
+      if (!document) return null;
+
+      const rating = await transaction.documentRating.upsert({
+        where: {
+          documentId_userId: {
+            documentId,
+            userId: user.id
+          }
+        },
+        update: {
+          rating: payload.rating
+        },
+        create: {
+          documentId,
+          userId: user.id,
+          rating: payload.rating
+        }
+      });
+      const stats = await transaction.documentRating.aggregate({
+        where: {
+          documentId
+        },
+        _avg: {
+          rating: true
+        },
+        _count: {
+          rating: true
+        }
+      });
+      const ratingAvg = Number(stats._avg.rating ?? 0);
+      const ratingCount = stats._count.rating;
+      const updatedDocument = await transaction.document.update({
+        where: {
+          id: documentId
+        },
+        data: {
+          ratingAvg: ratingAvg.toFixed(2),
+          ratingCount,
+          ...buildCommunityBadgePatch(document, ratingAvg, ratingCount)
+        },
+        include: documentInclude
+      });
+
+      return {
+        document: updatedDocument,
+        rating
+      };
+    });
+
+    if (!result) {
+      response.status(404).json({ message: "Không tìm thấy tài liệu có thể đánh giá." });
+      return;
+    }
+
+    const responsePayload: RatingDocumentResponse = {
+      document: mapDocumentItem(result.document),
+      rating: {
+        id: result.rating.id,
+        userId: result.rating.userId,
+        rating: result.rating.rating,
+        createdAt: result.rating.createdAt.toISOString(),
+        updatedAt: result.rating.updatedAt.toISOString()
+      }
+    };
+
+    response.status(200).json(responsePayload);
+  })
+);
+
+router.post(
+  "/:id/comments",
+  authenticate,
+  requireRole([...uploadAllowedRoles]),
+  asyncHandler(async (request, response) => {
+    const user = (request as AuthenticatedRequest).currentUser;
+    const documentId = readString(request.params.id);
+    const payload = parseCommentDocumentBody(request.body);
+
+    if (!payload) {
+      response.status(400).json({ message: "Bình luận cần có nội dung từ 2 đến 1000 ký tự." });
+      return;
+    }
+
+    const document = await prisma.document.findFirst({
+      where: buildDetailDocumentWhere(documentId),
+      select: {
+        id: true
+      }
+    });
+
+    if (!document) {
+      response.status(404).json({ message: "Không tìm thấy tài liệu có thể bình luận." });
+      return;
+    }
+
+    const comment = await prisma.documentComment.create({
+      data: {
+        documentId,
+        userId: user.id,
+        content: payload.content
+      },
+      include: {
+        user: {
+          select: {
+            fullName: true,
+            role: true
+          }
+        }
+      }
+    });
+    const responsePayload: CommentDocumentResponse = {
+      comment: mapDocumentCommentItem(comment)
+    };
+
+    response.status(201).json(responsePayload);
+  })
+);
+
+router.post(
+  "/:id/reports",
+  authenticate,
+  requireRole([...uploadAllowedRoles]),
+  asyncHandler(async (request, response) => {
+    const user = (request as AuthenticatedRequest).currentUser;
+    const documentId = readString(request.params.id);
+    const payload = parseReportDocumentBody(request.body);
+
+    if (!payload) {
+      response.status(400).json({ message: "Vui lòng chọn lý do báo cáo hợp lệ." });
+      return;
+    }
+
+    const document = await prisma.document.findFirst({
+      where: buildPublicDocumentWhere(documentId),
+      select: {
+        id: true
+      }
+    });
+
+    if (!document) {
+      response.status(404).json({ message: "Không tìm thấy tài liệu có thể báo cáo." });
+      return;
+    }
+
+    const report = await prisma.documentReport.create({
+      data: {
+        documentId,
+        reporterId: user.id,
+        reason: payload.reason,
+        detail: payload.detail
+      }
+    });
+    const responsePayload: ReportDocumentResponse = {
+      report: mapDocumentReportItem(report)
+    };
+
+    response.status(201).json(responsePayload);
+  })
+);
+
+router.get(
   "/:id",
   asyncHandler(async (request, response) => {
     const documentId = String(request.params.id ?? "");
     const document = await prisma.document.findFirst({
-      where: {
-        id: documentId,
-        visibility: "public",
-        verificationStatus: {
-          not: "rejected"
+      where: buildPublicDocumentWhere(documentId),
+      include: {
+        ...documentInclude,
+        comments: {
+          where: {
+            isHidden: false
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 20,
+          include: {
+            user: {
+              select: {
+                fullName: true,
+                role: true
+              }
+            }
+          }
+        },
+        reviewHistory: {
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 10,
+          include: {
+            reviewer: {
+              select: {
+                fullName: true,
+                role: true
+              }
+            }
+          }
         }
-      },
-      include: documentInclude
+      }
     });
 
     if (!document) {
@@ -289,7 +676,9 @@ router.get(
     }
 
     const payload: DocumentDetailResponse = {
-      document: mapDocumentItem(document)
+      document: mapDocumentItem(document),
+      comments: document.comments.map(mapDocumentCommentItem),
+      reviewHistory: document.reviewHistory.map(mapReviewHistoryItem)
     };
 
     response.status(200).json(payload);
@@ -300,7 +689,7 @@ function buildDocumentWhere(query: ListDocumentsQuery): Prisma.DocumentWhereInpu
   const where: Prisma.DocumentWhereInput = {
     visibility: "public",
     verificationStatus: {
-      not: "rejected"
+      in: [...publicDocumentStatuses]
     }
   };
 
@@ -347,7 +736,7 @@ async function getDocumentFacets(): Promise<DocumentFacets> {
     where: {
       visibility: "public",
       verificationStatus: {
-        not: "rejected"
+        in: [...publicDocumentStatuses]
       }
     },
     include: {
@@ -478,6 +867,64 @@ async function getUploadOptions(): Promise<UploadOptionsResponse> {
   };
 }
 
+async function getReviewQueueSummary(): Promise<ReviewQueueResponse["summary"]> {
+  const [pending, changesRequested, approved, rejected, openReports] = await Promise.all([
+    prisma.document.count({
+      where: {
+        verificationStatus: "pending"
+      }
+    }),
+    prisma.document.count({
+      where: {
+        verificationStatus: "changes_requested"
+      }
+    }),
+    prisma.document.count({
+      where: {
+        verificationStatus: "approved"
+      }
+    }),
+    prisma.document.count({
+      where: {
+        verificationStatus: "rejected"
+      }
+    }),
+    prisma.documentReport.count({
+      where: {
+        status: "open"
+      }
+    })
+  ]);
+
+  return {
+    pending,
+    changesRequested,
+    approved,
+    rejected,
+    openReports
+  };
+}
+
+function buildPublicDocumentWhere(documentId: string): Prisma.DocumentWhereInput {
+  return {
+    id: documentId,
+    visibility: "public",
+    verificationStatus: {
+      in: [...publicDocumentStatuses]
+    }
+  };
+}
+
+function buildDetailDocumentWhere(documentId: string): Prisma.DocumentWhereInput {
+  return {
+    id: documentId,
+    visibility: "public",
+    verificationStatus: {
+      in: [...detailDocumentStatuses]
+    }
+  };
+}
+
 function parseListDocumentsQuery(query: Request["query"]): ListDocumentsQuery {
   return {
     q: readString(query.q),
@@ -532,6 +979,110 @@ function parseUploadDocumentBody(body: Request["body"]): UploadDocumentBody | nu
     examName,
     pages,
     tags
+  };
+}
+
+function parseReviewDocumentBody(body: Request["body"]): ReviewDocumentBody | null {
+  const source = readBodyObject(body);
+  const decision = parseOptionalEnumValue(source.decision, reviewDecisionValues);
+  const note = readNullableString(source.note);
+  const requestedLevel = parseOptionalEnumValue(source.verificationLevel, verificationLevelValues);
+
+  if (!decision) return null;
+
+  if (decision === "approved") {
+    const verificationLevel = requestedLevel ?? "silver";
+
+    if (verificationLevel === "unverified") return null;
+
+    return {
+      decision,
+      verificationLevel,
+      note
+    };
+  }
+
+  if (!note || note.length < 5) return null;
+
+  return {
+    decision,
+    verificationLevel: "unverified",
+    note
+  };
+}
+
+function parseRatingDocumentBody(body: Request["body"]): RatingDocumentBody | null {
+  const source = readBodyObject(body);
+  const rating = readPositiveInteger(source.rating, null, 1, 5);
+
+  return rating ? { rating } : null;
+}
+
+function parseCommentDocumentBody(body: Request["body"]): CommentDocumentBody | null {
+  const source = readBodyObject(body);
+  const content = readString(source.content);
+
+  if (content.length < 2 || content.length > 1000) return null;
+
+  return {
+    content
+  };
+}
+
+function parseReportDocumentBody(body: Request["body"]): ReportDocumentBody | null {
+  const source = readBodyObject(body);
+  const reason = parseOptionalEnumValue(source.reason, reportReasonValues);
+  const detail = readNullableString(source.detail);
+
+  if (!reason) return null;
+
+  return {
+    reason,
+    detail
+  };
+}
+
+function parseReviewQueueStatuses(value: unknown): VerificationStatus[] {
+  const statuses = parseEnumList(value, verificationStatusValues);
+
+  return statuses.length > 0 ? statuses : ["pending", "changes_requested"];
+}
+
+function buildReviewDocumentUpdate(payload: ReviewDocumentBody): Prisma.DocumentUpdateInput {
+  if (payload.decision === "approved") {
+    return {
+      verificationStatus: "approved",
+      verificationLevel: payload.verificationLevel,
+      visibility: "public"
+    };
+  }
+
+  if (payload.decision === "rejected") {
+    return {
+      verificationStatus: "rejected",
+      verificationLevel: "unverified",
+      visibility: "hidden"
+    };
+  }
+
+  return {
+    verificationStatus: "changes_requested",
+    verificationLevel: "unverified",
+    visibility: "public"
+  };
+}
+
+function buildCommunityBadgePatch(
+  document: Pick<DocumentWithRelations, "verificationLevel" | "verificationStatus">,
+  ratingAvg: number,
+  ratingCount: number
+): Prisma.DocumentUpdateInput {
+  if (document.verificationStatus !== "approved") return {};
+  if (document.verificationLevel !== "unverified") return {};
+  if (ratingAvg < 3.5 || ratingCount < 20) return {};
+
+  return {
+    verificationLevel: "bronze"
   };
 }
 
@@ -668,6 +1219,64 @@ function mapDocumentItem(document: DocumentWithRelations): DocumentItem {
   };
 }
 
+function mapReviewHistoryItem(review: {
+  id: string;
+  reviewer: {
+    fullName: string;
+    role: ReviewHistoryItem["reviewerRole"];
+  };
+  decision: ReviewDecision;
+  verificationLevel: VerificationLevel;
+  note: string | null;
+  createdAt: Date;
+}): ReviewHistoryItem {
+  return {
+    id: review.id,
+    reviewerName: review.reviewer.fullName,
+    reviewerRole: review.reviewer.role,
+    decision: review.decision,
+    verificationLevel: review.verificationLevel,
+    note: review.note,
+    createdAt: review.createdAt.toISOString()
+  };
+}
+
+function mapDocumentCommentItem(comment: {
+  id: string;
+  user: {
+    fullName: string;
+    role: ReviewHistoryItem["reviewerRole"];
+  };
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: comment.id,
+    authorName: comment.user.fullName,
+    authorRole: comment.user.role,
+    content: comment.content,
+    createdAt: comment.createdAt.toISOString(),
+    updatedAt: comment.updatedAt.toISOString()
+  };
+}
+
+function mapDocumentReportItem(report: {
+  id: string;
+  reason: ReportReason;
+  detail: string | null;
+  status: "open" | "resolved" | "dismissed";
+  createdAt: Date;
+}) {
+  return {
+    id: report.id,
+    reason: report.reason,
+    detail: report.detail,
+    status: report.status,
+    createdAt: report.createdAt.toISOString()
+  };
+}
+
 function buildDocumentTags(document: DocumentWithRelations) {
   return [...readStoredTags(document.tags), document.subject?.name, document.major?.name, document.year ? String(document.year) : null]
     .filter((tag): tag is string => Boolean(tag))
@@ -706,6 +1315,10 @@ function normalizeSearchText(value: string) {
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim();
+}
+
+function readBodyObject(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
 function readString(value: unknown) {
